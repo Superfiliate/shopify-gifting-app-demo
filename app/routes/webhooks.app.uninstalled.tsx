@@ -12,6 +12,8 @@ export async function action({ request }: ActionFunctionArgs) {
       update: {
         enabled: false,
         syncRequested: false,
+        automaticOrders: false,
+        encryptedCredentials: null,
         uninstalledAt: new Date(),
       },
     }),

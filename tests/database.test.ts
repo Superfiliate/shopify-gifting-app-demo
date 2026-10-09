@@ -7,6 +7,7 @@ vi.mock("../app/shopify.server", () => ({
     admin: async () => ({ admin: { graphql: mocks.graphql } }),
   },
   authenticate: {
+    admin: async () => ({ session: { shop: "fixture.myshopify.com" } }),
     webhook: async (request: Request) => ({
       shop: "fixture.myshopify.com",
       payload: await request.json(),
@@ -39,8 +40,16 @@ describe.skipIf(!run)("persisted worker lifecycle", () => {
     });
     await db.shopSettings.upsert({
       where: { shop: "fixture.myshopify.com" },
-      create: { shop: "fixture.myshopify.com", syncRequested: true },
-      update: { syncRequested: true, uninstalledAt: null },
+      create: {
+        shop: "fixture.myshopify.com",
+        syncRequested: true,
+        automaticOrders: true,
+      },
+      update: {
+        syncRequested: true,
+        automaticOrders: true,
+        uninstalledAt: null,
+      },
     });
     vi.stubGlobal(
       "fetch",
@@ -169,6 +178,61 @@ describe.skipIf(!run)("persisted worker lifecycle", () => {
       await db.giftSync.count({ where: { shop: "fixture.myshopify.com" } }),
     ).toBe(1);
   });
+  it("fetches without creating orders until a gift is explicitly approved", async () => {
+    const manualReward = { ...fixtureReward, id: fixtureReward.id + 10 };
+    await db.shopSettings.update({
+      where: { shop: "fixture.myshopify.com" },
+      data: {
+        automaticOrders: false,
+        syncRequested: true,
+        nextPollAttemptAt: new Date(0),
+      },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json([manualReward]));
+    const previousCreations = mocks.graphql.mock.calls.filter(([query]) =>
+      query.includes("mutation CreateGift"),
+    ).length;
+    await worker.workerCycle();
+    const record = await db.giftSync.findUniqueOrThrow({
+      where: {
+        shop_rewardId: {
+          shop: "fixture.myshopify.com",
+          rewardId: manualReward.id,
+        },
+      },
+    });
+    expect(record.orderId).toBeNull();
+    expect(record.creationAttempted).toBe(false);
+    expect(
+      mocks.graphql.mock.calls.filter(([query]) =>
+        query.includes("mutation CreateGift"),
+      ),
+    ).toHaveLength(previousCreations);
+    const { action } = await import("../app/routes/app._index");
+    const approve = () =>
+      action({
+        request: new Request("https://example.com/app", {
+          method: "POST",
+          body: new URLSearchParams({ intent: "create", id: record.id }),
+        }),
+        params: {},
+        context: {},
+        url: new URL("https://example.com/app"),
+        pattern: "/app",
+      });
+    expect((await approve()).error).toBeNull();
+    expect((await approve()).error).toContain("already processing");
+    await worker.workerCycle();
+    expect(
+      (await db.giftSync.findUniqueOrThrow({ where: { id: record.id } }))
+        .orderId,
+    ).toBe(order.id);
+    expect(
+      mocks.graphql.mock.calls.filter(([query]) =>
+        query.includes("mutation CreateGift"),
+      ),
+    ).toHaveLength(previousCreations + 1);
+  });
   it("retains a failed manual poll for retry while automatic imports are paused", async () => {
     await db.shopSettings.update({
       where: { shop: "fixture.myshopify.com" },
@@ -199,6 +263,48 @@ describe.skipIf(!run)("persisted worker lifecycle", () => {
         })
       ).syncRequested,
     ).toBe(false);
+  });
+
+  it("saves tested credentials encrypted and never returns them in the dashboard", async () => {
+    vi.stubEnv("SHOPIFY_API_SECRET", "fixture-shopify-secret");
+    const route = await import("../app/routes/app._index");
+    const result = await route.action({
+      request: new Request("https://example.com/app", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "settings",
+          clientId: "sfci1_updated",
+          clientSecret: "sfcs1_do-not-display",
+          campaignIds: String(fixtureReward.campaign.id),
+        }),
+      }),
+      params: {},
+      context: {},
+      url: new URL("https://example.com/app"),
+      pattern: "/app",
+    });
+    expect(result.error).toBeNull();
+    const settings = await db.shopSettings.findUniqueOrThrow({
+      where: { shop: "fixture.myshopify.com" },
+    });
+    expect(settings.encryptedCredentials).not.toContain("sfcs1_do-not-display");
+    const { getShopIntegrationConfig } =
+      await import("../app/gifting/settings.server");
+    expect((await getShopIntegrationConfig(settings.shop)).clientSecret).toBe(
+      "sfcs1_do-not-display",
+    );
+    const loaded = await route.loader({
+      request: new Request("https://example.com/app"),
+      params: {},
+      context: {},
+      url: new URL("https://example.com/app"),
+      pattern: "/app",
+    });
+    expect(loaded.credentialsSaved).toBe(true);
+    expect(JSON.stringify(loaded)).not.toContain("sfcs1_do-not-display");
+    expect(JSON.stringify(loaded)).not.toContain(
+      settings.encryptedCredentials!,
+    );
   });
 
   it("preserves a webhook wake arriving during order reconciliation", async () => {

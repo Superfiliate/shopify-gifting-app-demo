@@ -1,10 +1,20 @@
-export function getIntegrationConfig() {
+export function getIntegrationConfig(
+  overrides: {
+    clientId?: string;
+    clientSecret?: string;
+    campaignIds?: string;
+  } = {},
+) {
   const shop = process.env.SHOPIFY_SHOP_DOMAIN || "";
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop))
     throw new Error(
       "Set SHOPIFY_SHOP_DOMAIN to your store's myshopify.com domain",
     );
-  const campaignIds = (process.env.SF_CAMPAIGN_IDS || "")
+  const campaignIds = (
+    overrides.campaignIds ??
+    process.env.SF_CAMPAIGN_IDS ??
+    ""
+  )
     .split(",")
     .filter(Boolean)
     .map((id) => Number(id.trim()));
@@ -31,8 +41,8 @@ export function getIntegrationConfig() {
     throw new Error(
       "SF_BASE_URL must be an origin without a path or credentials",
     );
-  const clientId = process.env.SF_CLIENT_ID;
-  const clientSecret = process.env.SF_CLIENT_SECRET;
+  const clientId = overrides.clientId ?? process.env.SF_CLIENT_ID;
+  const clientSecret = overrides.clientSecret ?? process.env.SF_CLIENT_SECRET;
   if (!clientId || !clientSecret)
     throw new Error("Set SF_CLIENT_ID and SF_CLIENT_SECRET");
   const pollSeconds = Number(process.env.POLL_INTERVAL_SECONDS || 300);

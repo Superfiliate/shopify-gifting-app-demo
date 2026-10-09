@@ -10,8 +10,8 @@ import {
 
 export function createSuperfiliate(
   fetcher: typeof fetch = fetch,
+  config = getIntegrationConfig(),
 ): SuperfiliateGateway {
-  const config = getIntegrationConfig();
   async function request(path: string, method = "GET", body?: Shipment) {
     let response: Response;
     try {

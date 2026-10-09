@@ -15,7 +15,7 @@ docker compose exec dev pnpm run setup
 docker compose exec dev pnpm demo
 ```
 
-Open **http://localhost:4510/demo**. Advance through the gift lifecycle and inspect the draft-order request. All data is fictional; the demo does not call either API.
+Open **http://localhost:4510/demo**. Use Quick settings, Fetch gifts, Create order, and the simulated shipment/tracking controls. The preview and installed app share the same screen. All data is fictional; the demo does not call either API.
 
 You can also open this repository as a Dev Container. Its setup installs dependencies and applies the database migration.
 
@@ -48,7 +48,7 @@ sequenceDiagram
 
 The app keeps order creation separate from shipment. Superfiliate stays `ready_to_send` until Shopify reports the entire gift order fulfilled; the app's database prevents importing it again during that time. Shopify routes and physically fulfils the order through the merchant's existing warehouse or 3PL workflow. This app does not create a shipping label or mark an unshipped Shopify order fulfilled.
 
-Polling imports new gifts every five minutes when enabled. Failed manual fetches remain queued and retry after 30 seconds. Webhooks wake shipment reconciliation, and periodic order reads recover missed events. Pausing imports keeps existing shipment reconciliation running.
+Polling imports new gifts every five minutes when enabled. By default, fetched gifts wait for **Create order**; Quick settings can enable automatic order creation. Once an order has started, pausing imports or automatic creation keeps its shipment reconciliation running. Failed manual fetches remain queued and retry after 30 seconds. Webhooks wake shipment reconciliation, and periodic order reads recover missed events. Pausing imports keeps existing shipment reconciliation running.
 
 ## Connect a merchant-owned app
 
@@ -57,8 +57,8 @@ Polling imports new gifts every five minutes when enabled. Failed manual fetches
 3. Copy `.env.example` to `.env` and configure the values below. Never commit that file.
 4. Link the CLI configuration to your app with `pnpm config:link` (inside the devcontainer: `docker compose exec dev pnpm config:link`). Retain the scopes and webhook subscriptions in `shopify.app.toml`; linking can replace that file.
 5. Obtain Superfiliate Partner API credentials with `gifting_rewards.write` (which includes read access). These gifting endpoints currently require alpha access.
-6. Configure one or more **merchant-managed** campaigns in `SF_CAMPAIGN_IDS`. Assign this integration sole responsibility for those campaigns, and submit a test gift with a valid address and Shopify product selections.
-7. Start `pnpm dev` and, in another terminal, `pnpm worker`. Open the installed app through Shopify admin. Choose **Sync now** for one import, or **Enable automatic imports**.
+6. Configure one or more **merchant-managed** campaigns in `SF_CAMPAIGN_IDS`. You can set campaigns in Quick settings or through the environment. Assign this integration sole responsibility for those campaigns, and submit a test gift with a valid address and Shopify product selections.
+7. Start `pnpm dev` and, in another terminal, `pnpm worker`. Open the installed app through Shopify admin. In **Quick settings**, enter your Superfiliate client ID, client secret and campaign IDs, then choose **Save & test connection**. Choose **Fetch gifts**, then **Create order** for a gift. Enable automatic fetching and/or automatic order creation when ready.
 
 For the container workflow, use `docker compose exec dev` before each project command. Inside Docker, use `DATABASE_URL=postgresql://gifting:gifting@db:5432/gifting` in `.env`; outside Docker use the localhost URL in `.env.example`. Shopify CLI runs an HTTPS development tunnel. The web and worker processes need the same database and app configuration; copy the current tunnel URL to `.env` for the worker.
 
@@ -74,8 +74,8 @@ Shopify authentication and expiring offline tokens are managed by the official S
 | `SHOPIFY_SHOP_DOMAIN`                   | Exactly one `your-store.myshopify.com` domain                       |
 | `SCOPES`                                | Same scopes as `shopify.app.toml`                                   |
 | `SF_BASE_URL`                           | Superfiliate API origin; defaults to `https://api.superfiliate.com` |
-| `SF_CLIENT_ID`, `SF_CLIENT_SECRET`      | Partner API credentials; sent as `Bearer <id>:<secret>`             |
-| `SF_CAMPAIGN_IDS`                       | Required comma-separated allowlist of merchant-managed campaign IDs |
+| `SF_CLIENT_ID`, `SF_CLIENT_SECRET`      | Optional environment defaults; Quick settings can save credentials  |
+| `SF_CAMPAIGN_IDS`                       | Comma-separated campaign IDs; Quick settings can override this      |
 | `SF_TRACKING_UPDATES_ENABLED`           | Enable only after the companion tracking API is deployed            |
 | `POLL_INTERVAL_SECONDS`                 | Import/reconciliation interval; defaults to 300, minimum 30         |
 
@@ -126,9 +126,9 @@ The repository includes a `Dockerfile` for the web app and worker. Supply the en
 2. Run `pnpm migrate` once as a release task to apply migrations.
 3. Run a web process with `pnpm start` and a worker process with `pnpm worker:production` using the same image, environment and database. Use one worker initially.
 4. Set the app URL/auth redirects to your deployed HTTPS origin and run `pnpm deploy` to register Shopify configuration and webhooks. This command updates Shopify's app configuration; **it does not host your server**.
-5. Install the app, open it through Shopify admin to establish its offline session, submit a test gift and choose Sync now before enabling automatic imports.
+5. Install the app, open it through Shopify admin to establish its offline session, submit a test gift and choose Fetch gifts, then Create order, before enabling automatic creation.
 
-Local Compose credentials are for development only. Use separate managed database credentials in deployment. App secrets and Superfiliate credentials remain on the server and are not entered into the browser UI.
+Local Compose credentials are for development only. Use separate managed database credentials in deployment. Shopify app secrets stay in the environment. Superfiliate credentials can be entered in Quick settings and are encrypted in PostgreSQL with AES-256-GCM using a key derived from the Shopify app secret. They are never returned to the browser after saving. If you rotate the Shopify app secret, re-enter the Superfiliate credentials. Environment credentials remain supported as a fallback.
 
 ## Verify
 
@@ -143,7 +143,7 @@ docker compose exec dev pnpm build
 
 The integration test exercises a real PostgreSQL record through import, order creation, duplicate webhook delivery, first fulfilment and late tracking, with simulated external API responses. It does not create real Shopify orders.
 
-For a live development-store check: submit a gift → Sync now → verify exactly one zero-total, unfulfilled Shopify order → fulfil it without tracking → verify Superfiliate shows shipped → add tracking → verify shipment metadata updates. Deliver the same webhook twice and repeat Sync now; both should reuse the existing order. A real store, app installation, eligible gift and enabled Partner API credentials are needed for this final check.
+For a live development-store check: submit a gift → Fetch gifts → Create order → verify exactly one zero-total, unfulfilled Shopify order → fulfil it without tracking → verify Superfiliate shows shipped → add tracking → verify shipment metadata updates. Deliver the same webhook twice and repeat Fetch gifts; both should reuse the existing order. A real store, app installation, eligible gift and enabled Partner API credentials are needed for this final check.
 
 ## Source guide
 

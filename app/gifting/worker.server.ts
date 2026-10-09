@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import db from "../db.server";
 import { assertConfiguredShop, unauthenticated } from "../shopify.server";
 import { shipmentSchema } from "./schemas";
-import { getIntegrationConfig } from "./config.server";
+import { getShopIntegrationConfig } from "./settings.server";
 import { createSuperfiliate } from "./superfiliate.server";
 import { createShopifyGateway } from "./shopify-gateway.server";
 import { processGift, type SaveGift } from "./process-gift";
@@ -42,7 +42,14 @@ export async function saveGift(id: string, patch: Parameters<SaveGift>[0]) {
 }
 
 export async function workerCycle() {
-  const config = getIntegrationConfig();
+  let config;
+  try {
+    config = await getShopIntegrationConfig(
+      process.env.SHOPIFY_SHOP_DOMAIN || "",
+    );
+  } catch {
+    return;
+  }
   const connection = await pool.connect();
   const lockKey = `gifting:${config.shop}`;
   let locked = false;
@@ -65,7 +72,7 @@ export async function workerCycle() {
       update: {},
     });
     if (settings.uninstalledAt) return;
-    const superfiliate = createSuperfiliate();
+    const superfiliate = createSuperfiliate(fetch, config);
     const { admin } = await unauthenticated.admin(config.shop);
     const shopify = createShopifyGateway(admin.graphql);
     const pollDue =
@@ -98,6 +105,15 @@ export async function workerCycle() {
         shop: config.shop,
         state: { not: "needs_review" },
         nextAttemptAt: { lte: new Date() },
+        OR: [
+          { processingRequested: true },
+          { creationAttempted: true },
+          { draftOrderId: { not: null } },
+          { orderId: { not: null } },
+          ...(settings.automaticOrders
+            ? [{ campaignId: { in: config.campaignIds } }]
+            : []),
+        ],
       },
       orderBy: { nextAttemptAt: "asc" },
       take: 20,
@@ -107,6 +123,30 @@ export async function workerCycle() {
         where: { shop: config.shop },
       });
       if (active?.uninstalledAt) break;
+      if (
+        !active?.automaticOrders &&
+        !record.processingRequested &&
+        !record.creationAttempted &&
+        !record.draftOrderId &&
+        !record.orderId
+      ) {
+        await db.giftSync.update({
+          where: { id: record.id },
+          data: {
+            state: "needs_review",
+            lastError:
+              "This campaign was removed from Quick settings. Restore it before retrying this gift.",
+          },
+        });
+        continue;
+      }
+      if (
+        !record.creationAttempted &&
+        !record.draftOrderId &&
+        !record.orderId &&
+        !config.campaignIds.includes(record.campaignId)
+      )
+        continue;
       try {
         await processGift(
           {

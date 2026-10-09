@@ -1,6 +1,9 @@
 import { useState } from "react";
+import {
+  GiftingDashboard,
+  type GiftRow,
+} from "../components/gifting-dashboard";
 import { fixtureReward } from "../gifting/fixtures";
-import { draftInput } from "../gifting/draft";
 import "../styles/dashboard.css";
 
 export function loader() {
@@ -8,109 +11,82 @@ export function loader() {
     throw new Response("Not found", { status: 404 });
   return null;
 }
-const steps = [
-  {
-    title: "Creator details received",
-    detail:
-      "Superfiliate returns a ready_to_send reward with selected products and a shipping address.",
-    state: "Ready to send",
-  },
-  {
-    title: "Shopify order created",
-    detail:
-      "The worker creates a discounted draft, checks the zero total and completes it. The warehouse can now process the order.",
-    state: "Awaiting fulfilment",
-  },
-  {
-    title: "Gift fulfilled",
-    detail:
-      "Shopify reports successful fulfilment. The worker calls Superfiliate /fulfill with the order reference.",
-    state: "Shipped · tracking pending",
-  },
-  {
-    title: "Tracking added",
-    detail:
-      "Shopify adds tracking later. The worker updates the shipment through the companion Partner API endpoint.",
-    state: "Shipped · tracking synced",
-  },
-];
 export default function Demo() {
-  const [step, setStep] = useState(0);
+  const [records, setRecords] = useState<GiftRow[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState(String(fixtureReward.campaign.id));
+  const [enabled, setEnabled] = useState(false);
+  const [automaticOrders, setAutomaticOrders] = useState(false);
+  const [lastFetched, setLastFetched] = useState<string | null>(null);
+  function act(form: FormData) {
+    const intent = form.get("intent");
+    if (intent === "settings") {
+      setCampaigns(String(form.get("campaignIds") || ""));
+      setEnabled(form.get("enabled") === "on");
+      setAutomaticOrders(form.get("automaticOrders") === "on");
+      setMessage("Sample settings saved. No connection was made.");
+    } else if (intent === "sync") {
+      setRecords((previous) =>
+        previous.length
+          ? previous
+          : [
+              {
+                id: "fixture",
+                rewardId: fixtureReward.id,
+                creatorName: "Alex Creator",
+                orderId: automaticOrders ? "gid://shopify/Order/1001" : null,
+                orderName: automaticOrders ? "#DEMO-1001" : null,
+                state: automaticOrders ? "awaiting_fulfillment" : "queued",
+                fulfilled: false,
+                trackingNumber: null,
+                lastError: null,
+              },
+            ],
+      );
+      setLastFetched(new Date().toISOString());
+      setMessage("Sample gift loaded. Repeated fetches keep the same gift.");
+    } else {
+      setRecords((previous) =>
+        previous.map((record) => {
+          if (record.id !== form.get("id")) return record;
+          if (intent === "create")
+            return {
+              ...record,
+              orderId: "gid://shopify/Order/1001",
+              orderName: "#DEMO-1001",
+              state: "awaiting_fulfillment",
+            };
+          if (intent === "ship")
+            return { ...record, fulfilled: true, state: "synced" };
+          if (intent === "track")
+            return { ...record, trackingNumber: "DEMO-TRACK-001" };
+          return record;
+        }),
+      );
+      setMessage(
+        intent === "create"
+          ? "Sample $0 order created. In the installed app, this creates a real Shopify draft and completes it."
+          : intent === "ship"
+            ? "Simulated Shopify fulfillment: Superfiliate now shows shipped."
+            : "Sample tracking synced to Superfiliate.",
+      );
+    }
+  }
   return (
-    <main className="dashboard">
-      <header>
-        <p className="eyebrow">SUPERFILIATE · CUSTOM APP REFERENCE</p>
-        <h1>A gift’s journey, connected.</h1>
-        <p className="lede">
-          See how your own Shopify app can turn submitted gifts into
-          warehouse-ready orders.
-        </p>
-      </header>
-      <p className="notice">
-        Fixture demo. All data is fictional; these controls make no API calls or
-        real orders.
-      </p>
-      <div className="demo-grid">
-        <section className="card">
-          <h2>Follow the gift</h2>
-          <ol className="timeline">
-            {steps.map((item, index) => (
-              <li key={item.title} className={index <= step ? "active" : ""}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.detail}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          <div className="toolbar">
-            <button
-              onClick={() => setStep(Math.min(step + 1, 3))}
-              disabled={step === 3}
-            >
-              Next step
-            </button>
-            <button className="secondary" onClick={() => setStep(0)}>
-              Reset
-            </button>
-          </div>
-        </section>
-        <section className="card">
-          <p className="eyebrow">REWARD #{fixtureReward.id}</p>
-          <h2>Alex Creator</h2>
-          <p>Summer creator gifting</p>
-          <span className="badge green">{steps[step].state}</span>
-          <dl>
-            <dt>Selected product</dt>
-            <dd>Creator coffee bundle · Dark roast × 1</dd>
-            <dt>Shopify order</dt>
-            <dd>{step > 0 ? "#DEMO-1001" : "Not created yet"}</dd>
-            <dt>Tracking</dt>
-            <dd>
-              {step === 3 ? "UPS · DEMO-TRACKING-001" : "Not available yet"}
-            </dd>
-          </dl>
-          <p className="muted">
-            The reward ID connects both systems and prevents repeated imports.
-          </p>
-        </section>
-      </div>
-      <section className="card">
-        <h2>The draft-order payload</h2>
-        <p>
-          The app uses the selected Shopify variant and creator address, with a
-          100% gift discount and free shipping.
-        </p>
-        <details>
-          <summary>Inspect the example request</summary>
-          <pre>{JSON.stringify(draftInput(fixtureReward), null, 2)}</pre>
-        </details>
-      </section>
-      <footer>
-        Customers fork this code, register their own custom-distribution app and
-        deploy it for their store.
-      </footer>
-    </main>
+    <GiftingDashboard
+      shop="your-test-store.myshopify.com"
+      configured
+      campaigns={campaigns}
+      credentialsSaved
+      enabled={enabled}
+      automaticOrders={automaticOrders}
+      syncRequested={false}
+      lastFetched={lastFetched}
+      trackingEnabled
+      records={records}
+      message={message}
+      demo
+      onDemoAction={act}
+    />
   );
 }

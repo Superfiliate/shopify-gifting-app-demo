@@ -35,6 +35,9 @@ model ShopSettings {
   nextPollAttemptAt DateTime  @default(now())
   lastError         String?
   uninstalledAt     DateTime?
+  encryptedCredentials String?
+  campaignIds       String?
+  automaticOrders   Boolean   @default(false)
 }
 
 model GiftSync {
@@ -55,6 +58,7 @@ model GiftSync {
   lastSyncedShipment String?
   lastError          String?
   attempts           Int      @default(0)
+  processingRequested Boolean @default(false)
   nextAttemptAt      DateTime @default(now())
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
