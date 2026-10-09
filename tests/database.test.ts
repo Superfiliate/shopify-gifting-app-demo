@@ -169,4 +169,165 @@ describe.skipIf(!run)("persisted worker lifecycle", () => {
       await db.giftSync.count({ where: { shop: "fixture.myshopify.com" } }),
     ).toBe(1);
   });
+  it("retains a failed manual poll for retry while automatic imports are paused", async () => {
+    await db.shopSettings.update({
+      where: { shop: "fixture.myshopify.com" },
+      data: {
+        enabled: false,
+        syncRequested: true,
+        nextPollAttemptAt: new Date(0),
+      },
+    });
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("temporary timeout"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await worker.workerCycle();
+    log.mockRestore();
+    const pending = await db.shopSettings.findUniqueOrThrow({
+      where: { shop: "fixture.myshopify.com" },
+    });
+    expect(pending.syncRequested).toBe(true);
+    expect(pending.nextPollAttemptAt.getTime()).toBeGreaterThan(Date.now());
+    await db.shopSettings.update({
+      where: { shop: pending.shop },
+      data: { nextPollAttemptAt: new Date(0) },
+    });
+    await worker.workerCycle();
+    expect(
+      (
+        await db.shopSettings.findUniqueOrThrow({
+          where: { shop: pending.shop },
+        })
+      ).syncRequested,
+    ).toBe(false);
+  });
+
+  it("preserves a webhook wake arriving during order reconciliation", async () => {
+    const record = await db.giftSync.findUniqueOrThrow({
+      where: {
+        shop_rewardId: {
+          shop: "fixture.myshopify.com",
+          rewardId: fixtureReward.id,
+        },
+      },
+    });
+    await db.giftSync.update({
+      where: { id: record.id },
+      data: { nextAttemptAt: new Date(0) },
+    });
+    mocks.graphql.mockImplementationOnce(async () => {
+      await db.giftSync.update({
+        where: { id: record.id },
+        data: { nextAttemptAt: new Date() },
+      });
+      return Response.json({
+        data: {
+          order: {
+            ...order,
+            cancelledAt: null,
+            displayFulfillmentStatus: "FULFILLED",
+            fulfillments: [
+              {
+                status: "SUCCESS",
+                trackingInfo: [
+                  {
+                    company: "UPS",
+                    number: "TRACK-1",
+                    url: "https://example.com/TRACK-1",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      });
+    });
+    await worker.workerCycle();
+    expect(
+      (
+        await db.giftSync.findUniqueOrThrow({ where: { id: record.id } })
+      ).nextAttemptAt.getTime(),
+    ).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("restores unattempted redacted gifts without clearing creation safeguards", async () => {
+    const { importReadyRewards } =
+      await import("../app/gifting/import-rewards.server");
+    const fresh = { ...fixtureReward, id: fixtureReward.id + 1 };
+    const uncertain = { ...fixtureReward, id: fixtureReward.id + 2 };
+    for (const reward of [fresh, uncertain]) {
+      await db.giftSync.create({
+        data: {
+          shop: "fixture.myshopify.com",
+          rewardId: reward.id,
+          campaignId: reward.campaign.id,
+          creatorName: "Removed creator",
+          reward: { redacted: true },
+          creationAttempted: reward.id === uncertain.id,
+        },
+      });
+    }
+    await importReadyRewards("fixture.myshopify.com", [fresh, uncertain]);
+    const restored = await db.giftSync.findUniqueOrThrow({
+      where: {
+        shop_rewardId: { shop: "fixture.myshopify.com", rewardId: fresh.id },
+      },
+    });
+    const guarded = await db.giftSync.findUniqueOrThrow({
+      where: {
+        shop_rewardId: {
+          shop: "fixture.myshopify.com",
+          rewardId: uncertain.id,
+        },
+      },
+    });
+    expect(restored.reward).toMatchObject({
+      id: fresh.id,
+      shipping_address: fresh.shipping_address,
+    });
+    expect(guarded.creationAttempted).toBe(true);
+    expect(guarded.reward).toEqual({ redacted: true });
+    await worker.saveGift(restored.id, { creationAttempted: true });
+    await expect(
+      worker.saveGift(restored.id, { creationAttempted: true }),
+    ).rejects.toThrow("already claimed");
+    await db.shopSettings.update({
+      where: { shop: "fixture.myshopify.com" },
+      data: { uninstalledAt: new Date() },
+    });
+    await db.giftSync.update({
+      where: { id: restored.id },
+      data: { reward: { redacted: true }, creationAttempted: false },
+    });
+    await importReadyRewards("fixture.myshopify.com", [fresh]);
+    expect(
+      (await db.giftSync.findUniqueOrThrow({ where: { id: restored.id } }))
+        .reward,
+    ).toEqual({ redacted: true });
+  });
+  it("releases a checked-out connection when lock acquisition fails", async () => {
+    const { Pool } = await import("pg");
+    const external = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 1,
+    });
+    const client = await external.connect();
+    const query = vi
+      .spyOn(client, "query")
+      .mockRejectedValueOnce(new Error("lock connection interrupted"));
+    const release = vi.spyOn(client, "release");
+    const connect = vi
+      .spyOn(Pool.prototype, "connect")
+      .mockImplementationOnce(async () => client);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await worker.workerCycle();
+      expect(release).toHaveBeenCalledWith(true);
+    } finally {
+      connect.mockRestore();
+      query.mockRestore();
+      release.mockRestore();
+      log.mockRestore();
+      await external.end();
+    }
+  });
 });

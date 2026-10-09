@@ -48,7 +48,7 @@ sequenceDiagram
 
 The app keeps order creation separate from shipment. Superfiliate stays `ready_to_send` until Shopify reports the entire gift order fulfilled; the app's database prevents importing it again during that time. Shopify routes and physically fulfils the order through the merchant's existing warehouse or 3PL workflow. This app does not create a shipping label or mark an unshipped Shopify order fulfilled.
 
-Polling imports new gifts every five minutes when enabled. Webhooks wake shipment reconciliation, and periodic order reads recover missed events. Pausing imports keeps existing shipment reconciliation running.
+Polling imports new gifts every five minutes when enabled. Failed manual fetches remain queued and retry after 30 seconds. Webhooks wake shipment reconciliation, and periodic order reads recover missed events. Pausing imports keeps existing shipment reconciliation running.
 
 ## Connect a merchant-owned app
 
@@ -62,7 +62,7 @@ Polling imports new gifts every five minutes when enabled. Webhooks wake shipmen
 
 For the container workflow, use `docker compose exec dev` before each project command. Inside Docker, use `DATABASE_URL=postgresql://gifting:gifting@db:5432/gifting` in `.env`; outside Docker use the localhost URL in `.env.example`. Shopify CLI runs an HTTPS development tunnel. The web and worker processes need the same database and app configuration; copy the current tunnel URL to `.env` for the worker.
 
-Shopify authentication and expiring offline tokens are managed by the official Shopify React Router library. The authenticated UI and webhooks validate the configured `SHOPIFY_SHOP_DOMAIN`; the worker uses the saved offline session.
+Shopify authentication and expiring offline tokens are managed by the official Shopify React Router library. On reinstall, a fresh poll restores redacted gifts only when order creation has never been attempted, preserving the duplicate-prevention guard. The authenticated UI and webhooks validate the configured `SHOPIFY_SHOP_DOMAIN`; the worker uses the saved offline session.
 
 ### Configuration
 
@@ -115,7 +115,7 @@ That endpoint requires `gifting_rewards.write`, preserves omitted fields, clears
 - Cancellation requires review and never recreates the order automatically. The sample does not reverse Superfiliate shipment status or model returns/delivery confirmation.
 - The first Superfiliate fulfilment payload is persisted and retried identically after interruptions, even if Shopify adds tracking meanwhile; subsequent changes use the update endpoint.
 - After an order is saved, the local recipient address and contact snapshot is removed. Uninstall disables processing, removes Shopify sessions and redacts stored recipient snapshots. Store database access and backups securely.
-- Editing a gift's address/products after it has been imported requires manual coordination; the app does not edit existing Shopify orders. Keep campaign processing owned by one integration.
+- Editing a gift's address/products after a draft has been attempted requires manual coordination; the app does not edit existing Shopify orders. Keep campaign processing owned by one integration.
 - Standard Shopify order access covers recent orders. Orders older than Shopify's access window require appropriate additional access or manual reconciliation.
 
 ## Deploy
