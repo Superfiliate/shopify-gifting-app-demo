@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: gifting
+      POSTGRES_PASSWORD: gifting
+      POSTGRES_DB: gifting
+    ports:
+      - "127.0.0.1:55438:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gifting"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    working_dir: /workspace
+    command: sleep infinity
+    environment:
+      DATABASE_URL: postgresql://gifting:gifting@db:5432/gifting
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    ports:
+      - "127.0.0.1:4510:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  node_modules:
