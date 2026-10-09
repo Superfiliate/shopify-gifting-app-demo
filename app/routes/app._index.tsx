@@ -47,9 +47,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
   let configured = true;
-  let config;
   try {
-    config = await getShopIntegrationConfig(session.shop);
+    await getShopIntegrationConfig(session.shop);
   } catch {
     configured = false;
   }
@@ -130,8 +129,9 @@ export async function action({ request }: ActionFunctionArgs) {
       };
     }
   }
+  let config;
   try {
-    await getShopIntegrationConfig(session.shop);
+    config = await getShopIntegrationConfig(session.shop);
   } catch {
     return { error: "Complete quick settings first.", message: null };
   }
