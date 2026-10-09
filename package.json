@@ -1,0 +1,60 @@
+{
+  "name": "shopify-gifting-app-demo",
+  "private": true,
+  "scripts": {
+    "dev": "shopify app dev",
+    "demo": "DEMO_MODE=true vite --host 0.0.0.0",
+    "build": "react-router build",
+    "start": "react-router-serve ./build/server/index.js",
+    "worker": "tsx --env-file=.env scripts/worker.ts",
+    "worker:production": "tsx scripts/worker.ts",
+    "setup": "prisma generate && prisma migrate deploy",
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm typecheck && pnpm format:check",
+    "config:link": "shopify app config link",
+    "deploy": "shopify app deploy",
+    "prisma": "prisma",
+    "shopify": "shopify",
+    "test:integration": "RUN_DATABASE_TESTS=true vitest run tests/database.test.ts"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@react-router/dev": "7.18.2",
+    "@react-router/fs-routes": "7.18.2",
+    "@react-router/node": "7.18.2",
+    "@react-router/serve": "7.18.2",
+    "@shopify/app-bridge-react": "^4.2.4",
+    "@shopify/shopify-app-react-router": "^3.0.1",
+    "@shopify/shopify-app-session-storage-prisma": "^11.0.0",
+    "isbot": "^5.1.31",
+    "prisma": "^6.19.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "7.18.2",
+    "vite-tsconfig-paths": "^6.0.4",
+    "zod": "^4.0.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@shopify/cli": "^3.89.0",
+    "@shopify/polaris-types": "1.0.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.25",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^5.9.3",
+    "prettier": "^3.6.2",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4",
+    "tsx": "^4.20.6",
+    "@types/pg": "^8.15.5"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "license": "MIT"
+}

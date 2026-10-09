@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?
+  emailVerified       Boolean?
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+model ShopSettings {
+  shop          String   @id
+  enabled       Boolean  @default(false)
+  syncRequested Boolean  @default(false)
+  lastPolledAt  DateTime?
+  lastError     String?
+  uninstalledAt DateTime?
+}
+model GiftSync {
+  id                 String   @id @default(cuid())
+  shop               String
+  rewardId           Int
+  campaignId         Int
+  creatorName        String
+  state              String   @default("queued")
+  reward             Json?
+  draftOrderId       String?
+  orderId            String?
+  orderName          String?
+  shipment           Json?
+  creationAttempted  Boolean  @default(false)
+  fulfillRequest     Json?
+  fulfilled          Boolean  @default(false)
+  lastSyncedShipment String?
+  lastError          String?
+  attempts           Int      @default(0)
+  nextAttemptAt      DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  @@unique([shop, rewardId])
+  @@index([shop, nextAttemptAt])
+}
+model WebhookReceipt {
+  id        String   @id
+  shop      String
+  orderId   String
+  createdAt DateTime @default(now())
+}

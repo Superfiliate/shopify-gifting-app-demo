@@ -1,0 +1,7 @@
+name = "Gifting web app"
+roles = ["frontend", "backend"]
+webhooks_path = "/webhooks/shopify"
+
+[commands]
+predev = "pnpm run setup"
+dev = "pnpm exec react-router dev"
