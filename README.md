@@ -19,6 +19,8 @@ Open **http://localhost:4510/demo**. Advance through the gift lifecycle and insp
 
 You can also open this repository as a Dev Container. Its setup installs dependencies and applies the database migration.
 
+![Fixture demo showing tracking synced](docs/demo.png)
+
 ## How it works
 
 ```mermaid
@@ -121,7 +123,7 @@ That endpoint requires `gifting_rewards.write`, preserves omitted fields, clears
 The repository includes a `Dockerfile` for the web app and worker. Supply the environment variables through your hosting platform and provision PostgreSQL.
 
 1. Build the image: `docker build -t gifting-demo .`.
-2. Run `pnpm run setup` once as a release task to apply migrations.
+2. Run `pnpm migrate` once as a release task to apply migrations.
 3. Run a web process with `pnpm start` and a worker process with `pnpm worker:production` using the same image, environment and database. Use one worker initially.
 4. Set the app URL/auth redirects to your deployed HTTPS origin and run `pnpm deploy` to register Shopify configuration and webhooks. This command updates Shopify's app configuration; **it does not host your server**.
 5. Install the app, open it through Shopify admin to establish its offline session, submit a test gift and choose Sync now before enabling automatic imports.

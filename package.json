@@ -18,7 +18,8 @@
     "deploy": "shopify app deploy",
     "prisma": "prisma",
     "shopify": "shopify",
-    "test:integration": "RUN_DATABASE_TESTS=true vitest run tests/database.test.ts"
+    "test:integration": "RUN_DATABASE_TESTS=true vitest run tests/database.test.ts",
+    "migrate": "prisma migrate deploy"
   },
   "type": "module",
   "engines": {
@@ -40,7 +41,8 @@
     "react-router": "7.18.2",
     "vite-tsconfig-paths": "^6.0.4",
     "zod": "^4.0.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "tsx": "^4.20.6"
   },
   "devDependencies": {
     "@shopify/cli": "^3.89.0",
@@ -52,7 +54,6 @@
     "prettier": "^3.6.2",
     "vite": "^7.3.1",
     "vitest": "^3.2.4",
-    "tsx": "^4.20.6",
     "@types/pg": "^8.15.5"
   },
   "packageManager": "pnpm@12.3.4",
