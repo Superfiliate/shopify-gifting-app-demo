@@ -244,6 +244,32 @@ describe("gift lifecycle", () => {
   });
 });
 describe("draft policy", () => {
+  it.each(["", "+551234567", "not a phone"])(
+    "omits an invalid optional phone (%s)",
+    (phone) => {
+      const input = draftInput({
+        ...fixtureReward,
+        creator: { ...fixtureReward.creator, phone },
+      });
+      expect(input.phone).toBeUndefined();
+      expect(input.shippingAddress.phone).toBeUndefined();
+    },
+  );
+  it.each([
+    ["US", "(213) 373-4253", "+12133734253"],
+    ["BR", "(48) 99999-9999", "+5548999999999"],
+  ])(
+    "normalizes a valid %s phone for Shopify",
+    (country_code, phone, expected) => {
+      const input = draftInput({
+        ...fixtureReward,
+        shipping_address: { ...fixtureReward.shipping_address, country_code },
+        creator: { ...fixtureReward.creator, phone },
+      });
+      expect(input.phone).toBe(expected);
+      expect(input.shippingAddress.phone).toBe(expected);
+    },
+  );
   it("uses real variants, free shipping and a 100% discount", () => {
     expect(draftInput(fixtureReward)).toMatchObject({
       shippingLine: { price: "0.00" },

@@ -6,6 +6,7 @@ export interface GiftRow {
   rewardId: number;
   creatorName: string;
   orderId: string | null;
+  draftOrderId: string | null;
   orderName: string | null;
   state: string;
   fulfilled: boolean;
@@ -190,6 +191,14 @@ export function GiftingDashboard(props: Props) {
                         rel="noreferrer"
                       >
                         {record.orderName || "View order"}
+                      </a>
+                    ) : record.draftOrderId ? (
+                      <a
+                        href={`https://${props.shop}/admin/draft_orders/${record.draftOrderId.split("/").pop()}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View draft
                       </a>
                     ) : (
                       "—"

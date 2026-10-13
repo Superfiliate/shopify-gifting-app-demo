@@ -1,4 +1,9 @@
 import { ReviewRequired, type Reward } from "./types";
+import {
+  isSupportedCountry,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "libphonenumber-js/max";
 
 export function rewardTag(id: number) {
   return `sf-gift-${id}`;
@@ -25,9 +30,17 @@ export function draftInput(reward: Reward) {
     !reward.creator.last_name
   )
     throw new ReviewRequired("Gift is missing required shipping details");
+  const country = address.country_code.toUpperCase();
+  const parsedPhone = parsePhoneNumberFromString(reward.creator.phone, {
+    defaultCountry: isSupportedCountry(country)
+      ? (country as CountryCode)
+      : undefined,
+    extract: false,
+  });
+  const phone = parsedPhone?.isValid() ? parsedPhone.number : undefined;
   return {
     email: reward.creator.email,
-    phone: reward.creator.phone || undefined,
+    phone,
     shippingAddress: {
       firstName: reward.creator.first_name,
       lastName: reward.creator.last_name,
@@ -37,7 +50,7 @@ export function draftInput(reward: Reward) {
       countryCode: address.country_code,
       provinceCode: address.province_code || undefined,
       zip: address.zip,
-      phone: reward.creator.phone || undefined,
+      phone,
     },
     lineItems: reward.selected_products.map((item) => ({
       variantId: variantGid(item.variant_external_id),

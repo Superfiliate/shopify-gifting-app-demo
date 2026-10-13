@@ -74,10 +74,13 @@ export function createShopifyGateway(graphql: Graphql): ShopifyGateway {
       throw new RetryableError("Shopify request was interrupted");
     }
   }
-  function assertMutation(payload: { userErrors: { message: string }[] }) {
-    if (payload.userErrors.length)
+  function assertMutation(payload: {
+    userErrors: { field?: string[] | null; message: string }[];
+  }) {
+    const error = payload.userErrors[0];
+    if (error)
       throw new ReviewRequired(
-        "Shopify rejected the draft operation. Review product availability, address and permissions in Shopify.",
+        `Shopify rejected the draft operation: ${error.field?.join(".") || "draft"}: ${error.message}`,
       );
   }
   return {
@@ -116,7 +119,7 @@ export function createShopifyGateway(graphql: Graphql): ShopifyGateway {
           userErrors: { message: string }[];
         };
       }>(
-        `mutation CreateGift($input: DraftOrderInput!) { draftOrderCreate(input: $input) { draftOrder { ${DRAFT_FIELDS} } userErrors { message } } }`,
+        `mutation CreateGift($input: DraftOrderInput!) { draftOrderCreate(input: $input) { draftOrder { ${DRAFT_FIELDS} } userErrors { field message } } }`,
         { input },
         true,
       );
@@ -145,7 +148,7 @@ export function createShopifyGateway(graphql: Graphql): ShopifyGateway {
           userErrors: { message: string }[];
         };
       }>(
-        `mutation CompleteGift($id: ID!) { draftOrderComplete(id: $id) { draftOrder { ${DRAFT_FIELDS} } userErrors { message } } }`,
+        `mutation CompleteGift($id: ID!) { draftOrderComplete(id: $id) { draftOrder { ${DRAFT_FIELDS} } userErrors { field message } } }`,
         { id },
       );
       assertMutation(draftOrderComplete);

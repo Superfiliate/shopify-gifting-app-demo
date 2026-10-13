@@ -35,6 +35,7 @@ export default function Demo() {
                 rewardId: fixtureReward.id,
                 creatorName: "Alex Creator",
                 orderId: automaticOrders ? "gid://shopify/Order/1001" : null,
+                draftOrderId: null,
                 orderName: automaticOrders ? "#DEMO-1001" : null,
                 state: automaticOrders ? "awaiting_fulfillment" : "queued",
                 fulfilled: false,

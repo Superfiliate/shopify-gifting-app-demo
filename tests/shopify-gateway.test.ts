@@ -3,6 +3,21 @@ import { createShopifyGateway } from "../app/gifting/shopify-gateway.server";
 import { fixtureReward } from "../app/gifting/fixtures";
 
 describe("Shopify boundary", () => {
+  it("reports the rejected field and Shopify validation message", async () => {
+    const graphql = vi.fn().mockResolvedValue(
+      Response.json({
+        data: {
+          draftOrderCreate: {
+            draftOrder: null,
+            userErrors: [{ field: ["phone"], message: "Phone is invalid" }],
+          },
+        },
+      }),
+    );
+    await expect(
+      createShopifyGateway(graphql).createDraft(fixtureReward),
+    ).rejects.toThrow("phone: Phone is invalid");
+  });
   it("makes a single bounded creation request with the zero-price gift input", async () => {
     const graphql = vi.fn().mockResolvedValue(
       Response.json({

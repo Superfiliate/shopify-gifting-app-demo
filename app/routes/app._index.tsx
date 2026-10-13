@@ -38,6 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         creatorName: true,
         state: true,
         orderId: true,
+        draftOrderId: true,
         orderName: true,
         fulfilled: true,
         shipment: true,
