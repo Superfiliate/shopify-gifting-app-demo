@@ -1,0 +1,8 @@
+{
+  "name": "Shopify gifting demo",
+  "dockerComposeFile": "../compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "pnpm install && pnpm run setup",
+  "forwardPorts": [3000]
+}
