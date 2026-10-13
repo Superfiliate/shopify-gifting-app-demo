@@ -9,7 +9,10 @@ import {
 import db from "../db.server";
 import { assertConfiguredShop, authenticate } from "../shopify.server";
 import { getIntegrationConfig } from "../gifting/config.server";
-import { getShopIntegrationConfig } from "../gifting/settings.server";
+import {
+  ensureShopSettings,
+  getShopIntegrationConfig,
+} from "../gifting/settings.server";
 import {
   decryptCredentials,
   encryptCredentials,
@@ -24,11 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   assertConfiguredShop(session.shop);
   const [settings, records] = await Promise.all([
-    db.shopSettings.upsert({
-      where: { shop: session.shop },
-      create: { shop: session.shop },
-      update: {},
-    }),
+    ensureShopSettings(session.shop),
     db.giftSync.findMany({
       where: { shop: session.shop },
       orderBy: { createdAt: "desc" },

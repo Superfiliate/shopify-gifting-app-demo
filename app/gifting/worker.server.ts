@@ -4,7 +4,10 @@ import { ZodError } from "zod";
 import db from "../db.server";
 import { assertConfiguredShop, unauthenticated } from "../shopify.server";
 import { shipmentSchema } from "./schemas";
-import { getShopIntegrationConfig } from "./settings.server";
+import {
+  ensureShopSettings,
+  getShopIntegrationConfig,
+} from "./settings.server";
 import { createSuperfiliate } from "./superfiliate.server";
 import { createShopifyGateway } from "./shopify-gateway.server";
 import { processGift, type SaveGift } from "./process-gift";
@@ -66,11 +69,7 @@ export async function workerCycle() {
     locked = lock.rows[0].locked;
     if (!locked) return;
     assertConfiguredShop(config.shop);
-    const settings = await db.shopSettings.upsert({
-      where: { shop: config.shop },
-      create: { shop: config.shop },
-      update: {},
-    });
+    const settings = await ensureShopSettings(config.shop);
     if (settings.uninstalledAt) return;
     const superfiliate = createSuperfiliate(fetch, config);
     const { admin } = await unauthenticated.admin(config.shop);

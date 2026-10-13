@@ -233,6 +233,29 @@ describe.skipIf(!run)("persisted worker lifecycle", () => {
       ),
     ).toHaveLength(previousCreations + 1);
   });
+  it("initializes settings concurrently without resetting existing preferences", async () => {
+    const { ensureShopSettings } =
+      await import("../app/gifting/settings.server");
+    const shop = "concurrent-fixture.myshopify.com";
+    try {
+      await db.shopSettings.deleteMany({ where: { shop } });
+      const settings = await Promise.all(
+        Array.from({ length: 12 }, () => ensureShopSettings(shop)),
+      );
+      expect(settings.every((record) => record.shop === shop)).toBe(true);
+      expect(await db.shopSettings.count({ where: { shop } })).toBe(1);
+      await db.shopSettings.update({
+        where: { shop },
+        data: { enabled: true, automaticOrders: true },
+      });
+      expect(await ensureShopSettings(shop)).toMatchObject({
+        enabled: true,
+        automaticOrders: true,
+      });
+    } finally {
+      await db.shopSettings.deleteMany({ where: { shop } });
+    }
+  });
   it("retains a failed manual poll for retry while automatic imports are paused", async () => {
     await db.shopSettings.update({
       where: { shop: "fixture.myshopify.com" },
